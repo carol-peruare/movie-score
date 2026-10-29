@@ -5,12 +5,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api'
 export async function fetchMovies(
   query: string = '',
   page: number = 1,
-  genre: string = ''
+  genre: string = '',
+  year: string = ''
 ): Promise<PaginatedMoviesResponse> {
   const params = new URLSearchParams();
   if (query.trim()) params.append('query', query.trim());
   if (page > 1) params.append('page', String(page));
   if (genre) params.append('genre', genre);
+  if (year) params.append('year', year);
 
   const response = await fetch(`${API_BASE_URL}/search/?${params.toString()}`);
   if (!response.ok) {
@@ -20,16 +22,14 @@ export async function fetchMovies(
 }
 
 export async function getMovieDetail(tmdbId: number): Promise<MovieDetail> {
-  const response = await fetch(`${API_BASE_URL}/movies/${tmdbId}/`);
-  if (!response.ok) {
+const response = await fetch(`${API_BASE_URL}/movies/${tmdbId}/`, { cache: 'no-store' });  if (!response.ok) {
     throw new Error('Erro ao carregar os detalhes do filme.');
   }
   return response.json();
 }
 
 export async function getRatedMovies(): Promise<Movie[]> {
-  const response = await fetch(`${API_BASE_URL}/ratings/`);
-  if (!response.ok) {
+const response = await fetch(`${API_BASE_URL}/ratings/`, { cache: 'no-store' });  if (!response.ok) {
     throw new Error('Erro ao carregar os filmes avaliados.');
   }
   const data = await response.json();

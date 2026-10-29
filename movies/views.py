@@ -52,18 +52,18 @@ def search_movies(request):
     query = request.GET.get('query', '').strip()
     user_page = int(request.GET.get('page', '1'))
     genre_id = request.GET.get('genre', '').strip()
+    year = request.GET.get('year', '').strip()
 
     api_key = settings.TMDB_API_KEY
     if not api_key:
         return JsonResponse({"error": "Chave da API do TMDB não configurada no servidor."}, status=500)
 
-    # Cria uma chave única de cache para esta combinação de busca + página + gênero
-    cache_key = f"tmdb_search_{query}_{user_page}_{genre_id}"
+    # Inclui o ano (year) na etiqueta do cache para diferenciar buscas de anos diferentes
+    cache_key = f"tmdb_search_{query}_{user_page}_{genre_id}_{year}"
     cached_tmdb_data = cache.get(cache_key)
 
     ratings_map = dict(MovieRating.objects.values_list('tmdb_id', 'score'))
 
-    # Se já buscamos isso nos últimos 5 minutos, usa o cache instantaneamente!
     if cached_tmdb_data is not None:
         for movie in cached_tmdb_data["results"]:
             movie["user_rating"] = ratings_map.get(movie["id"])
@@ -84,6 +84,10 @@ def search_movies(request):
                 "language": "pt-BR",
                 "page": tmdb_page,
             }
+
+            # Se o usuário selecionou um ano, envia o filtro oficial para o TMDB
+            if year.isdigit():
+                params["primary_release_year"] = int(year)
 
             if query:
                 url = "https://api.themoviedb.org/3/search/movie"
@@ -111,6 +115,10 @@ def search_movies(request):
                 if query and genre_id and int(genre_id) not in genre_ids:
                     continue
 
+                release_date = item.get("release_date") or ""
+                if year and not release_date.startswith(year):
+                    continue
+
                 seen_ids.add(tmdb_id)
                 primary_genre = TMDB_GENRES.get(genre_ids[0], "Filme") if genre_ids else "Filme"
                 poster_path = item.get("poster_path")
@@ -119,7 +127,7 @@ def search_movies(request):
                     "id": tmdb_id,
                     "title": item.get("title"),
                     "synopsis": item.get("overview"),
-                    "release_date": item.get("release_date"),
+                    "release_date": release_date,
                     "genre": primary_genre,
                     "poster_url": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None,
                     "user_rating": ratings_map.get(tmdb_id),
@@ -138,7 +146,6 @@ def search_movies(request):
             "total_results": total_tmdb_results,
         }
 
-        # Salva o resultado no cache por 300 segundos (5 minutos)
         cache.set(cache_key, response_payload, timeout=300)
 
         return JsonResponse(response_payload)

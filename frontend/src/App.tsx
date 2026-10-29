@@ -25,27 +25,40 @@ const GENRE_OPTIONS = [
   { id: '27', label: 'Terror' },
 ];
 
+// Gera automaticamente a lista de anos de 2026 até 1970 sem precisarmos digitar um por um!
+const YEAR_OPTIONS = Array.from({ length: 57 }, (_, index) =>
+  String(2026 - index)
+);
+
 export function App() {
-  // Controla qual aba está aberta: 'discover' (Descobrir) ou 'rated' (Minhas avaliações)
   const [activeTab, setActiveTab] = useState<'discover' | 'rated'>('discover');
 
-  // Estados da busca, filtro de gênero e paginação
+  // Estados da busca, filtro de gênero, filtro de ano e paginação
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedGenre, setSelectedGenre] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>('');
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalResults, setTotalResults] = useState<number>(0);
 
-  // Listas de filmes e estados de carregamento/erro
   const [movies, setMovies] = useState<Movie[]>([]);
   const [ratedMovies, setRatedMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Guarda o ID do filme clicado para abrir o Modal (null = modal fechado)
   const [selectedMovieId, setSelectedMovieId] = useState<number | null>(null);
 
-  // Função que carrega os filmes avaliados do nosso banco de dados SQLite
+  // Função acionada ao clicar na logo CineScore: volta para a tela inicial limpa
+  const handleResetHome = () => {
+    setActiveTab('discover');
+    setSearchQuery('');
+    setSelectedGenre('');
+    setSelectedYear('');
+    setPage(1);
+    setSelectedMovieId(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const loadRatedMovies = async () => {
     try {
       const data = await getRatedMovies();
@@ -55,19 +68,18 @@ export function App() {
     }
   };
 
-  // Carrega a contagem inicial de filmes avaliados ao abrir o site
   useEffect(() => {
     loadRatedMovies();
   }, []);
 
-  // Busca filmes no TMDB sempre que mudar o texto da busca, o gênero ou a página
+  // Busca filmes sempre que mudar a busca, a página, o gênero OU o ano
   useEffect(() => {
     let active = true;
     const timer = setTimeout(() => {
       setLoading(true);
       setError(null);
 
-      fetchMovies(searchQuery, page, selectedGenre)
+      fetchMovies(searchQuery, page, selectedGenre, selectedYear)
         .then((data) => {
           if (!active) return;
           setMovies(data.results);
@@ -83,18 +95,17 @@ export function App() {
         .finally(() => {
           if (active) setLoading(false);
         });
-    }, 300); // Debounce de 300ms: espera o usuário terminar de digitar antes de chamar a API
+    }, 300);
 
     return () => {
       active = false;
       clearTimeout(timer);
     };
-  }, [searchQuery, page, selectedGenre]);
+  }, [searchQuery, page, selectedGenre, selectedYear]);
 
-  // Quando uma nota muda no modal, atualizamos a lista de avaliados e a busca atual
   const handleRatingChanged = () => {
     loadRatedMovies();
-    fetchMovies(searchQuery, page, selectedGenre)
+    fetchMovies(searchQuery, page, selectedGenre, selectedYear)
       .then((data) => setMovies(data.results))
       .catch(() => {});
   };
@@ -109,12 +120,10 @@ export function App() {
         <div className="container navbar-content">
           <div
             className="brand"
-            onClick={() => {
-              setActiveTab('discover');
-              setPage(1);
-            }}
+            onClick={handleResetHome}
+            title="Voltar para a página inicial"
           >
-<div className="brand-icon">
+            <div className="brand-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
                 <line x1="7" y1="2" x2="7" y2="22" />
@@ -125,7 +134,8 @@ export function App() {
                 <line x1="17" y1="17" x2="22" y2="17" />
                 <line x1="17" y1="7" x2="22" y2="7" />
               </svg>
-            </div>            <span>
+            </div>
+            <span>
               Cine<span className="brand-highlight">Score</span>
             </span>
           </div>
@@ -165,12 +175,13 @@ export function App() {
 
               <div className="filters-bar">
                 <div className="search-box">
-              <span className="search-icon" style={{ display: 'flex' }}>
+                  <span className="search-icon" style={{ display: 'flex' }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="11" cy="11" r="8" />
                       <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
-                  </span>                  <input
+                  </span>
+                  <input
                     type="text"
                     className="search-input"
                     placeholder="Buscar filmes"
@@ -196,6 +207,22 @@ export function App() {
                     </option>
                   ))}
                 </select>
+
+                <select
+                  className="genre-select"
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">Todos os anos</option>
+                  {YEAR_OPTIONS.map((yearStr) => (
+                    <option key={yearStr} value={yearStr}>
+                      {yearStr}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -205,7 +232,7 @@ export function App() {
               <div className="status-box">Carregando filmes...</div>
             ) : movies.length === 0 ? (
               <div className="status-box">
-                Nenhum filme encontrado para esta busca.
+                Nenhum filme encontrado para estes filtros.
               </div>
             ) : (
               <>
@@ -240,7 +267,10 @@ export function App() {
 
                 {/* Paginação */}
                 <div className="pagination-bar">
-                  
+                  <span>
+                    Página {page} de {totalPages}
+                  </span>
+
                   <div className="pagination-controls">
                     <button
                       type="button"
@@ -284,11 +314,6 @@ export function App() {
                       →
                     </button>
                   </div>
-
-                      <span className="pagination-info">
-                        Página {page} de {totalPages}
-                      </span>
-
                 </div>
               </>
             )}
@@ -371,47 +396,34 @@ export function App() {
         )}
       </main>
 
-     
-{/* Rodapé */}
-<footer className="footer">
-  <div className="container footer-content">
-    <div className="brand" style={{ fontSize: '1rem' }}>
-      <div
-        className="brand-icon"
-        style={{
-          width: '26px',
-          height: '26px',
-          fontSize: '0.8rem',
-          boxShadow: '0 0 14px rgba(124, 58, 237, 0.5)',
-          flexShrink: 0
-        }}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-          <line x1="7" y1="2" x2="7" y2="22" />
-          <line x1="17" y1="2" x2="17" y2="22" />
-          <line x1="2" y1="12" x2="22" y2="12" />
-        </svg>
-      </div>
+      {/* Rodapé */}
+      <footer className="footer">
+        <div className="container footer-content">
+          <div
+            className="brand"
+            style={{ fontSize: '1rem' }}
+            onClick={handleResetHome}
+            title="Voltar para a página inicial"
+          >
+            <div
+              className="brand-icon"
+              style={{ width: '26px', height: '26px' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                <line x1="7" y1="2" x2="7" y2="22" />
+                <line x1="17" y1="2" x2="17" y2="22" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+              </svg>
+            </div>
+            <span>
+              Cine<span className="brand-highlight">Score</span>
+            </span>
+          </div>
+          <span>CineScore</span>
+        </div>
+      </footer>
 
-      <span>
-        Cine<span className="brand-highlight">Score</span>
-      </span>
-    </div>
-  </div>
-</footer>
-
-
-      {/* Modal de Detalhes quando um filme está selecionado */}
       {selectedMovieId !== null && (
         <MovieModal
           movieId={selectedMovieId}
