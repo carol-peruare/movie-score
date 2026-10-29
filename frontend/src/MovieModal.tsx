@@ -34,10 +34,10 @@ export function MovieModal({ movieId, onClose, onRatingChanged }: MovieModalProp
         setMovie(data);
         if (data.user_rating) {
           setSelectedScore(data.user_rating);
-          setIsEditing(false); // Já tem nota: mostra o lápis e a lixeira (Imagem 3)
+          setIsEditing(false); // Já tem nota: mostra o lápis e a lixeira 
         } else {
           setSelectedScore(0);
-          setIsEditing(true); // Não tem nota: libera as estrelas para avaliar (Imagem 4)
+          setIsEditing(true); // Não tem nota: libera as estrelas para avaliar
         }
       })
       .catch((err) => {
