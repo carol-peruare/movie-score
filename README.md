@@ -4,7 +4,8 @@ CineScore é uma aplicação web que permite pesquisar filmes utilizando a API d
 
 O projeto foi estruturado seguindo uma arquitetura fullstack integrada, com frontend em React + TypeScript, backend em Python (Django) + SQLite e infraestrutura containerizada com Docker.
 
-![Ecrã Principal do CineScore](./docs/home.png)
+![Página Principal do CineScore](./home.png)
+
 ## O desafio
 
 Desenvolver uma aplicação utilizando:
