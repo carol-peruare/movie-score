@@ -1,0 +1,23 @@
+# Variáveis de ambiente e chaves secretas 
+*.env
+.env.*
+
+# Python / Django (Backend)
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+env/
+db.sqlite3
+
+# Node / React 
+node_modules/
+dist/
+build/
+.vite/
+
+# Arquivos de Sistema e Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
