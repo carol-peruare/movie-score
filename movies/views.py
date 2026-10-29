@@ -4,6 +4,7 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import MovieRating
+from django.core.cache import cache #Importa o sistema nativo de memória em cache do Django
 
 # Mapa oficial de IDs de gêneros do TMDB em Português
 TMDB_GENRES = {
@@ -49,69 +50,102 @@ def home(request):
 
 def search_movies(request):
     query = request.GET.get('query', '').strip()
-    page = request.GET.get('page', '1')
+    user_page = int(request.GET.get('page', '1'))
     genre_id = request.GET.get('genre', '').strip()
 
     api_key = settings.TMDB_API_KEY
     if not api_key:
         return JsonResponse({"error": "Chave da API do TMDB não configurada no servidor."}, status=500)
 
-    params = {
-        "api_key": api_key,
-        "language": "pt-BR",
-        "page": page,
-    }
+    # Cria uma chave única de cache para esta combinação de busca + página + gênero
+    cache_key = f"tmdb_search_{query}_{user_page}_{genre_id}"
+    cached_tmdb_data = cache.get(cache_key)
 
-    # Se o usuário digitou algo na busca, usa o endpoint de pesquisa do TMDB
-    if query:
-        url = "https://api.themoviedb.org/3/search/movie"
-        params["query"] = query
-    else:
-        # Se a busca está vazia, traz os "Filmes em alta" (discover/popular) permitindo filtrar por gênero!
-        url = "https://api.themoviedb.org/3/discover/movie"
-        params["sort_by"] = "popularity.desc"
-        if genre_id:
-            params["with_genres"] = genre_id
+    ratings_map = dict(MovieRating.objects.values_list('tmdb_id', 'score'))
+
+    # Se já buscamos isso nos últimos 5 minutos, usa o cache instantaneamente!
+    if cached_tmdb_data is not None:
+        for movie in cached_tmdb_data["results"]:
+            movie["user_rating"] = ratings_map.get(movie["id"])
+        return JsonResponse(cached_tmdb_data)
+
+    tmdb_start_page = (user_page - 1) * 2 + 1
+    tmdb_pages_to_fetch = [tmdb_start_page, tmdb_start_page + 1]
+
+    movies = []
+    seen_ids = set()
+    total_tmdb_pages = 1
+    total_tmdb_results = 0
 
     try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        for tmdb_page in tmdb_pages_to_fetch:
+            params = {
+                "api_key": api_key,
+                "language": "pt-BR",
+                "page": tmdb_page,
+            }
 
-        ratings_map = dict(MovieRating.objects.values_list('tmdb_id', 'score'))
+            if query:
+                url = "https://api.themoviedb.org/3/search/movie"
+                params["query"] = query
+            else:
+                url = "https://api.themoviedb.org/3/discover/movie"
+                params["sort_by"] = "popularity.desc"
+                if genre_id:
+                    params["with_genres"] = genre_id
 
-        movies = []
-        for item in data.get("results", []):
-            genre_ids = item.get("genre_ids", [])
-            # Se filtrou por gênero durante uma busca por texto, verifica se o filme pertence ao gênero
-            if query and genre_id and int(genre_id) not in genre_ids:
-                continue
+            response = requests.get(url, params=params, timeout=10)
+            if response.status_code != 200:
+                break
 
-            primary_genre = TMDB_GENRES.get(genre_ids[0], "Filme") if genre_ids else "Filme"
-            poster_path = item.get("poster_path")
-            tmdb_id = item.get("id")
+            data = response.json()
+            total_tmdb_pages = data.get("total_pages", 1)
+            total_tmdb_results = data.get("total_results", 0)
 
-            movies.append({
-                "id": tmdb_id,
-                "title": item.get("title"),
-                "synopsis": item.get("overview"),
-                "release_date": item.get("release_date"),
-                "genre": primary_genre,
-                "poster_url": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None,
-                "user_rating": ratings_map.get(tmdb_id),
-            })
+            for item in data.get("results", []):
+                tmdb_id = item.get("id")
+                if tmdb_id in seen_ids:
+                    continue
 
-        return JsonResponse({
+                genre_ids = item.get("genre_ids", [])
+                if query and genre_id and int(genre_id) not in genre_ids:
+                    continue
+
+                seen_ids.add(tmdb_id)
+                primary_genre = TMDB_GENRES.get(genre_ids[0], "Filme") if genre_ids else "Filme"
+                poster_path = item.get("poster_path")
+
+                movies.append({
+                    "id": tmdb_id,
+                    "title": item.get("title"),
+                    "synopsis": item.get("overview"),
+                    "release_date": item.get("release_date"),
+                    "genre": primary_genre,
+                    "poster_url": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None,
+                    "user_rating": ratings_map.get(tmdb_id),
+                })
+
+            if tmdb_page >= total_tmdb_pages:
+                break
+
+        movies = movies[:30]
+        calculated_total_pages = max(1, min(total_tmdb_pages // 2, 250))
+
+        response_payload = {
             "results": movies,
-            "page": data.get("page", 1),
-            "total_pages": min(data.get("total_pages", 1), 500),
-            "total_results": data.get("total_results", len(movies)),
-        })
+            "page": user_page,
+            "total_pages": calculated_total_pages,
+            "total_results": total_tmdb_results,
+        }
+
+        # Salva o resultado no cache por 300 segundos (5 minutos)
+        cache.set(cache_key, response_payload, timeout=300)
+
+        return JsonResponse(response_payload)
 
     except requests.RequestException as e:
         return JsonResponse({"error": "Erro ao comunicar com o TMDB.", "details": str(e)}, status=502)
-
-
+    
 def movie_detail(request, tmdb_id):
     api_key = settings.TMDB_API_KEY
     if not api_key:
