@@ -5,54 +5,108 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import MovieRating
 
+# Mapa oficial de IDs de gêneros do TMDB em Português
+TMDB_GENRES = {
+    28: "Ação",
+    12: "Aventura",
+    16: "Animação",
+    35: "Comédia",
+    80: "Crime",
+    99: "Documentário",
+    18: "Drama",
+    10751: "Família",
+    14: "Fantasia",
+    36: "História",
+    27: "Terror",
+    10402: "Música",
+    9648: "Mistério",
+    10749: "Romance",
+    878: "Ficção científica",
+    10770: "Cinema TV",
+    53: "Suspense",
+    10752: "Guerra",
+    37: "Faroeste",
+}
+
+
+def format_runtime(minutes):
+    """Converte minutos (ex: 128) para o formato do layout '2h 08min'."""
+    if not minutes or not isinstance(minutes, int):
+        return None
+    hours = minutes // 60
+    mins = minutes % 60
+    if hours > 0:
+        return f"{hours}h {mins:02d}min"
+    return f"{mins}min"
+
 
 def home(request):
     return JsonResponse({
-        "message": "API de filmes funcionando!",
+        "message": "API CineScore funcionando!",
         "status": "ok"
     })
 
 
 def search_movies(request):
     query = request.GET.get('query', '').strip()
-
-    if not query:
-        return JsonResponse({"error": "O parâmetro 'query' é obrigatório."}, status=400)
+    page = request.GET.get('page', '1')
+    genre_id = request.GET.get('genre', '').strip()
 
     api_key = settings.TMDB_API_KEY
     if not api_key:
         return JsonResponse({"error": "Chave da API do TMDB não configurada no servidor."}, status=500)
 
-    url = "https://api.themoviedb.org/3/search/movie"
     params = {
         "api_key": api_key,
-        "query": query,
         "language": "pt-BR",
-        "page": 1
+        "page": page,
     }
+
+    # Se o usuário digitou algo na busca, usa o endpoint de pesquisa do TMDB
+    if query:
+        url = "https://api.themoviedb.org/3/search/movie"
+        params["query"] = query
+    else:
+        # Se a busca está vazia, traz os "Filmes em alta" (discover/popular) permitindo filtrar por gênero!
+        url = "https://api.themoviedb.org/3/discover/movie"
+        params["sort_by"] = "popularity.desc"
+        if genre_id:
+            params["with_genres"] = genre_id
 
     try:
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
 
-        # Busca todas as notas já salvas no banco para exibir junto na busca se necessário
         ratings_map = dict(MovieRating.objects.values_list('tmdb_id', 'score'))
 
         movies = []
         for item in data.get("results", []):
+            genre_ids = item.get("genre_ids", [])
+            # Se filtrou por gênero durante uma busca por texto, verifica se o filme pertence ao gênero
+            if query and genre_id and int(genre_id) not in genre_ids:
+                continue
+
+            primary_genre = TMDB_GENRES.get(genre_ids[0], "Filme") if genre_ids else "Filme"
             poster_path = item.get("poster_path")
             tmdb_id = item.get("id")
+
             movies.append({
                 "id": tmdb_id,
                 "title": item.get("title"),
                 "synopsis": item.get("overview"),
                 "release_date": item.get("release_date"),
+                "genre": primary_genre,
                 "poster_url": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None,
-                "user_rating": ratings_map.get(tmdb_id)
+                "user_rating": ratings_map.get(tmdb_id),
             })
 
-        return JsonResponse({"results": movies})
+        return JsonResponse({
+            "results": movies,
+            "page": data.get("page", 1),
+            "total_pages": min(data.get("total_pages", 1), 500),
+            "total_results": data.get("total_results", len(movies)),
+        })
 
     except requests.RequestException as e:
         return JsonResponse({"error": "Erro ao comunicar com o TMDB.", "details": str(e)}, status=502)
@@ -90,8 +144,9 @@ def movie_detail(request, tmdb_id):
                 "profile_url": f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else None
             })
 
-        # Verifica no nosso banco de dados se o usuário já avaliou este filme
         rating_obj = MovieRating.objects.filter(tmdb_id=tmdb_id).first()
+        genres_list = [g.get("name") for g in data.get("genres", [])]
+        primary_genre = genres_list[0] if genres_list else "Filme"
 
         poster_path = data.get("poster_path")
         movie_data = {
@@ -99,8 +154,10 @@ def movie_detail(request, tmdb_id):
             "title": data.get("title"),
             "synopsis": data.get("overview"),
             "release_date": data.get("release_date"),
+            "genre": primary_genre,
+            "genres": genres_list,
+            "runtime": format_runtime(data.get("runtime")),
             "poster_url": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None,
-            "genres": [g.get("name") for g in data.get("genres", [])],
             "cast": cast,
             "user_rating": rating_obj.score if rating_obj else None
         }
@@ -113,10 +170,6 @@ def movie_detail(request, tmdb_id):
 
 @csrf_exempt
 def ratings_list_create(request):
-    """
-    GET: Lista todos os filmes avaliados pelo usuário (Rated Movies Page).
-    POST: Avalia um filme com nota de 1 a 5.
-    """
     if request.method == "GET":
         ratings = MovieRating.objects.all().order_by("-updated_at")
         results = [
@@ -125,6 +178,8 @@ def ratings_list_create(request):
                 "title": r.title,
                 "poster_url": r.poster_url,
                 "release_date": r.release_date,
+                "genre": r.genre or "Filme",
+                "runtime": r.runtime,
                 "user_rating": r.score,
                 "updated_at": r.updated_at.isoformat(),
             }
@@ -142,6 +197,8 @@ def ratings_list_create(request):
         title = body.get("title")
         poster_url = body.get("poster_url")
         release_date = body.get("release_date")
+        genre = body.get("genre")
+        runtime = body.get("runtime")
         score = body.get("score")
 
         if not tmdb_id or not title or score is None:
@@ -162,6 +219,8 @@ def ratings_list_create(request):
                 "title": title,
                 "poster_url": poster_url,
                 "release_date": release_date,
+                "genre": genre,
+                "runtime": runtime,
                 "score": score,
             }
         )
@@ -174,6 +233,8 @@ def ratings_list_create(request):
                     "title": rating_obj.title,
                     "poster_url": rating_obj.poster_url,
                     "release_date": rating_obj.release_date,
+                    "genre": rating_obj.genre,
+                    "runtime": rating_obj.runtime,
                     "user_rating": rating_obj.score,
                 }
             },
@@ -185,10 +246,6 @@ def ratings_list_create(request):
 
 @csrf_exempt
 def rating_detail(request, tmdb_id):
-    """
-    PUT: Edita a nota (1 a 5) de um filme já avaliado.
-    DELETE: Remove a avaliação de um filme.
-    """
     rating_obj = MovieRating.objects.filter(tmdb_id=tmdb_id).first()
     if not rating_obj:
         return JsonResponse({"error": "Avaliação não encontrada para este filme."}, status=404)
@@ -216,6 +273,8 @@ def rating_detail(request, tmdb_id):
                 "title": rating_obj.title,
                 "poster_url": rating_obj.poster_url,
                 "release_date": rating_obj.release_date,
+                "genre": rating_obj.genre,
+                "runtime": rating_obj.runtime,
                 "user_rating": rating_obj.score,
             }
         })
