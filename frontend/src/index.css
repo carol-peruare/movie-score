@@ -291,59 +291,89 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }s
-/* Paginação no Rodapé (Corrigida e Alinhada) */
+.pagination-info {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-align: center;
+}
+
+/* Paginação */
 .pagination-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  grid-column: 1 / -1;
-  margin-top: 48px;
-  margin-bottom: 24px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  font-size: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+
+    width: 100%;
+    grid-column: 1 / -1;
+
+    margin-top: 56px;
+    margin-bottom: 40px;
+    padding-top: 24px;
+
+    border-top: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: 0.85rem;
 }
 
 .pagination-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
 
 .page-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 600;
-  transition: all 0.2s;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+
+    transition: all 0.2s ease;
 }
 
 .page-btn:hover:not(:disabled) {
-  border-color: var(--purple-light);
-  color: var(--text-main);
+    background: rgba(124, 58, 237, 0.12);
+    border-color: var(--purple-light);
+    color: var(--text-main);
+    transform: translateY(-2px);
 }
 
 .page-btn.active {
-  background: var(--purple-primary);
-  border-color: var(--purple-primary);
-  color: #fff;
-  box-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
+    background: var(--purple-primary);
+    border-color: var(--purple-primary);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
 }
 
 .page-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+    opacity: 0.35;
+    cursor: not-allowed;
 }
+
+@media (max-width: 768px) {
+    .pagination-bar {
+        margin-top: 40px;
+        margin-bottom: 28px;
+    }
+}
+
 /* Aba Minhas Avaliações */
 .rated-counter-box {
   background: var(--bg-card);

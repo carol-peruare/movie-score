@@ -238,12 +238,9 @@ export function App() {
                   ))}
                 </div>
 
-                {/* Paginação estilo Imagem 5 */}
+                {/* Paginação */}
                 <div className="pagination-bar">
-                  <span>
-                    Página {page} de {totalPages}
-                  </span>
-
+                  
                   <div className="pagination-controls">
                     <button
                       type="button"
@@ -287,12 +284,17 @@ export function App() {
                       →
                     </button>
                   </div>
+
+                      <span className="pagination-info">
+                        Página {page} de {totalPages}
+                      </span>
+
                 </div>
               </>
             )}
           </>
         ) : (
-          /* Aba Minhas Avaliações (Imagem 2) */
+          /* Aba Minhas Avaliações */
           <>
             <div className="page-header">
               <h1 className="page-title">Minhas avaliações</h1>
@@ -369,33 +371,45 @@ export function App() {
         )}
       </main>
 
-      {/* Rodapé (Imagem 5) */}
-      <footer className="footer">
-        <div className="container footer-content">
-          <div className="brand" style={{ fontSize: '1rem' }}>
-            <div
-              className="brand-icon"
-              style={{ width: '26px', height: '26px', fontSize: '0.8rem' }}
-            >
-             <div
-              className="brand-icon"
-              style={{ width: '26px', height: '26px' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-                <line x1="7" y1="2" x2="7" y2="22" />
-                <line x1="17" y1="2" x2="17" y2="22" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-              </svg>
-            </div>
-            </div>
-            <span>
-              Cine<span className="brand-highlight">Score</span>
-            </span>
-          </div>
-          <span>CineScore</span>
-        </div>
-      </footer>
+     
+{/* Rodapé */}
+<footer className="footer">
+  <div className="container footer-content">
+    <div className="brand" style={{ fontSize: '1rem' }}>
+      <div
+        className="brand-icon"
+        style={{
+          width: '26px',
+          height: '26px',
+          fontSize: '0.8rem',
+          boxShadow: '0 0 14px rgba(124, 58, 237, 0.5)',
+          flexShrink: 0
+        }}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+          <line x1="7" y1="2" x2="7" y2="22" />
+          <line x1="17" y1="2" x2="17" y2="22" />
+          <line x1="2" y1="12" x2="22" y2="12" />
+        </svg>
+      </div>
+
+      <span>
+        Cine<span className="brand-highlight">Score</span>
+      </span>
+    </div>
+  </div>
+</footer>
+
 
       {/* Modal de Detalhes quando um filme está selecionado */}
       {selectedMovieId !== null && (
